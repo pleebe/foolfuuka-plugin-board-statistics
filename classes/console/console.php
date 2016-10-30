@@ -126,6 +126,11 @@ class Console extends Command
                         }
                     }
 
+                    if ($a['function'] === 'Countries' && !$board->getValue('enable_flags', false)) {
+                        $skip = true;
+                        $found = true;
+                    }
+
                     // racing conditions with our cron.
                     if ($found === false) {
                        $this->board_stats->saveStat($board->id, $k, time() + 600, '');

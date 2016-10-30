@@ -44,11 +44,24 @@ class BoardStatistics extends Model
                 'interface' => 'availability',
                 'function' => 'Availability'
             ],
+            'countries' => [
+                'name' => _i('Countries'),
+                'description' => _i('Posts in last month by name and availability by time of day.'),
+                'frequency' => 604800, //once a week
+                'interface' => 'countries',
+                'function' => 'Countries'
+            ],
             'image-reposts' => [
                 'name' => _i('Image Reposts'),
                 'description' => _i('Posts in last month by name and availability by time of day.'),
                 'interface' => 'image_reposts',
                 'function' => 'ImageReposts'
+            ],
+            'largest-threads' => [
+                'name' => _i('Largest Threads'),
+                'description' => _i('Posts in last month by name and availability by time of day.'),
+                'interface' => 'largest_threads',
+                'function' => 'LargestThreads'
             ],
             'new-users' => [
                 'name' => _i('New Users'),
@@ -400,5 +413,31 @@ class BoardStatistics extends Model
             ->fetchAll();
 
         return $result;
+    }
+
+    public function processCountries($board)
+    {
+        return $this->dc->qb()
+            ->select('poster_country, COUNT(poster_country) AS countries')
+            ->from($board->getTable(), 'b')
+            ->groupBy('poster_country')
+            ->orderBy('COUNT(poster_country)', 'desc')
+            ->execute()
+            ->fetchAll();
+    }
+
+    public function processLargestThreads($board)
+    {
+        return $this->dc->qb()
+            ->select('bt.*, b.title, b.comment')
+            ->from($board->getTable('_threads'), 'bt')
+            ->leftJoin('bt', $board->getTable(), 'b', 'bt.thread_num = b.num')
+            ->where('b.op = 1')
+            ->andWhere('b.subnum = 0')
+            ->orderBy('bt.nreplies', 'desc')
+            ->setFirstResult(0)
+            ->setMaxResults(200)
+            ->execute()
+            ->fetchAll();
     }
 }
