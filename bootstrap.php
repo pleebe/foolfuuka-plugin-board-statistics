@@ -24,6 +24,7 @@ class HHVM_BS
                 $autoloader->addClassMap([
                     'Foolz\FoolFrame\Controller\Admin\Plugins\BoardStatistics' => __DIR__ . '/classes/controller/admin.php',
                     'Foolz\FoolFuuka\Controller\Chan\BoardStatistics' => __DIR__ . '/classes/controller/chan.php',
+                    'Foolz\FoolFuuka\Controller\Api\BoardStatistics' => __DIR__ . '/classes/controller/api/chan.php',
                     'Foolz\FoolFuuka\Plugins\BoardStatistics\Model\BoardStatistics' => __DIR__ . '/classes/model/board_statistics.php',
                     'Foolz\FoolFuuka\Plugins\BoardStatistics\Console\Console' => __DIR__ . '/classes/console/console.php'
                 ]);
@@ -95,6 +96,13 @@ class HHVM_BS
                                 ],
                                 [
                                     '_suffix' => '.*'
+                                ]
+                            ));
+                            $obj->getRouteCollection()->add(
+                                'foolfuuka.plugin.board_statistics.api.chan', new Route(
+                                '/_/api/chan/statistics/',
+                                [
+                                    '_controller' => '\Foolz\FoolFuuka\Controller\Api\BoardStatistics::statistics',
                                 ]
                             ));
                         }
