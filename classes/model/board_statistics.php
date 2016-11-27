@@ -329,7 +329,8 @@ class BoardStatistics extends Model
 
         $timestamp = strtotime($datetime->format('Y-m-d H:i:s'));
 
-        return $this->dc->qb()
+        $res = [];
+        $res['year'] = $this->dc->qb()
             ->select('day AS time, trips, names, anons')
             ->from($board->getTable('_daily'), 'bd')
             ->where('day > '.floor(($timestamp - 31536000) / 86400) * 86400)
@@ -337,6 +338,16 @@ class BoardStatistics extends Model
             ->orderBy('day')
             ->execute()
             ->fetchAll();
+
+        $res['total'] = $this->dc->qb()
+            ->select('day AS time, trips, names, anons')
+            ->from($board->getTable('_daily'), 'bd')
+            ->groupBy('day')
+            ->orderBy('day')
+            ->execute()
+            ->fetchAll();
+
+        return $res;
     }
 
     public function processPostCount($board)
