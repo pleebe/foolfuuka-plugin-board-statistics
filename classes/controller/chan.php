@@ -112,7 +112,7 @@ class BoardStatistics extends \Foolz\FoolFuuka\Controller\Chan
             ?>
             <link href="<?= $this->plugin->getAssetManager()->getAssetLink('style.css') ?>" rel="stylesheet"
                   type="text/css"/>
-            <div style="<?php if (in_array($stats['info']['interface'],['activity','population'])) : ?>margin: auto;width: 100%; text-align: center;<?php else: ?>margin: 20px auto; width:960px;<?php endif; ?>">
+            <div <?php if (in_array($stats['info']['interface'],['activity','population'])) : ?>style="margin: auto;width: 100%; text-align: center;"<?php endif; ?> class="stat_container">
                 <?php
                 include __DIR__ . '/../../views/' . $stats['info']['interface'] . '.php';
                 ?>

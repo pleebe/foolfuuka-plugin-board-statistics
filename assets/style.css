@@ -7,3 +7,13 @@
 	fill: none;
 	stroke: #000;
 }
+.stat_container {
+	margin: 20px auto;
+	width:70%;
+}
+@media only screen and (max-width: 600px) {
+	.stat_container {
+		margin: 0 !important;
+		width:100% !important;
+	}
+}
