@@ -98,14 +98,14 @@ class HHVM_BS
                                     '_suffix' => '.*'
                                 ]
                             ));
-                            $obj->getRouteCollection()->add(
-                                'foolfuuka.plugin.board_statistics.api.chan', new Route(
-                                '/_/api/chan/statistics/',
-                                [
-                                    '_controller' => '\Foolz\FoolFuuka\Controller\Api\BoardStatistics::statistics',
-                                ]
-                            ));
                         }
+                        $result->getObject()->getRouteCollection()->add(
+                            'foolfuuka.plugin.board_statistics.api.chan', new Route(
+                            '/_/api/chan/statistics/',
+                            [
+                                '_controller' => '\Foolz\FoolFuuka\Controller\Api\BoardStatistics::statistics',
+                            ]
+                        ));
                     });
             });
 
