@@ -3,6 +3,7 @@
 namespace Foolz\FoolFrame\Controller\Admin\Plugins;
 
 use \Foolz\FoolFuuka\Plugins\BoardStatistics\Model\BoardStatistics as BS;
+use \Foolz\FoolFuuka\Model\RadixCollection;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -13,11 +14,17 @@ class BoardStatistics extends \Foolz\FoolFrame\Controller\Admin
      */
     protected $board_stats;
 
+    /**
+     * @var RadixCollection
+     */
+    protected $radix_coll;
+
     public function before()
     {
         parent::before();
 
         $this->board_stats = $this->getContext()->getService('foolfuuka-plugin.board_statistics');
+        $this->radix_coll = $this->getContext()->getService('foolfuuka.radix_collection');
 
         $this->param_manager->setParam('controller_title', _i('Plugins'));
     }
@@ -39,6 +46,12 @@ class BoardStatistics extends \Foolz\FoolFrame\Controller\Admin
                 'help' => _i('Select the statistics to enable. Some might be too slow to process, so you should disable them. Some statistics don\'t use extra processing power so they are enabled by default.'),
                 'checkboxes' => []
             ],
+            'foolfuuka.plugins.board_statistics.deferred' => [
+                'type' => 'checkbox_array',
+                'label' => '',
+                'help' => _i('Defer statistics? Use this only if your board tables don\'t have statistics procedure.'),
+                'checkboxes' => []
+            ],
             'separator-2' => [
                 'type' => 'separator-short'
             ],
@@ -52,11 +65,21 @@ class BoardStatistics extends \Foolz\FoolFrame\Controller\Admin
             ],
         ];
 
-        foreach($this->board_stats->getStats() as $key => $stat) {
+        foreach ($this->board_stats->getStats() as $key => $stat) {
             $arr['foolfuuka.plugins.board_statistics.enabled']['checkboxes'][] = [
                 'type' => 'checkbox',
                 'label' => $key,
                 'help' => sprintf(_i('Enable %s statistics'), $stat['name']),
+                'array_key' => $key,
+                'preferences' => true,
+            ];
+        }
+
+        foreach ($this->radix_coll->getAll() as $key => $radix) {
+            $arr['foolfuuka.plugins.board_statistics.deferred']['checkboxes'][] = [
+                'type' => 'checkbox',
+                'label' => $key,
+                'help' => sprintf(_i('Defer on %s'), '/'.$radix->shortname.'/'),
                 'array_key' => $key,
                 'preferences' => true,
             ];

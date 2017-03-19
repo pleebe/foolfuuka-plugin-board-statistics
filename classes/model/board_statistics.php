@@ -33,7 +33,8 @@ class BoardStatistics extends Model
             'activity' => [
                 'name' => _i('Activity'),
                 'description' => _i('Posts in last month by name and availability by time of day.'),
-                'frequency' => 60 * 60 * 6, // every 6 hours
+                'frequency' => 60 * 60 * 24, // every day
+                //'frequency' => 1, // debug
                 'interface' => 'activity',
                 'function' => 'Activity'
             ],
@@ -66,6 +67,8 @@ class BoardStatistics extends Model
             'new-users' => [
                 'name' => _i('New Users'),
                 'description' => _i('Posts in last month by name and availability by time of day.'),
+                'frequency' => 60 * 60, // hourly
+                //'frequency' => 1, // debug
                 'interface' => 'new_users',
                 'function' => 'NewUsers'
             ],
@@ -73,12 +76,15 @@ class BoardStatistics extends Model
                 'name' => _i('Population'),
                 'description' => _i('Posts in last month by name and availability by time of day.'),
                 'frequency' => 60 * 60 * 24, // every day
+                //'frequency' => 1, // debug
                 'interface' => 'population',
                 'function' => 'Population',
             ],
             'post-count' => [
                 'name' => _i('Post Count'),
                 'description' => _i('Posts in last month by name and availability by time of day.'),
+                'frequency' => 60 * 60, // hourly
+                //'frequency' => 1, // debug
                 'interface' => 'post_count',
                 'function' => 'PostCount',
             ],
@@ -115,6 +121,22 @@ class BoardStatistics extends Model
             }
         }
         return $stats;
+    }
+
+    public function isBoardDeferred($radix)
+    {
+        $deferred = $this->preferences->get('foolfuuka.plugins.board_statistics.deferred');
+
+        if (!$deferred) {
+            return false;
+        }
+
+        $deferred = unserialize($deferred);
+
+        if ($deferred[$radix->id]) {
+            return true;
+        }
+        return false;
     }
 
     public function checkAvailableStats($stat, $selected_board)
@@ -206,6 +228,129 @@ class BoardStatistics extends Model
         }
     }
 
+    public function updateDaily($timestamp, $board)
+    {
+        $beginOfDay = strtotime("midnight", $timestamp);
+        $endOfDay = strtotime("tomorrow", $beginOfDay) - 1;
+
+        $lastDay = $this->dc->qb()
+            ->select('max(day) AS day')
+            ->from($board->getTable('_daily'), 'bd')
+            ->execute()
+            ->fetch();
+
+        if ($lastDay['day'] == 0) {
+            $lastDay['day'] = 1167609600; // start from 2007 if nothing there
+        }
+
+        $days = abs($lastDay['day'] - $endOfDay) / 60 / 60 / 24;
+
+        for ($i = 1; $i < $days; $i++) {
+            // loop through days and insert data
+            $thisDay = $this->dc->qb()
+                ->select('
+                    FLOOR(timestamp/86400)*86400 AS time,
+                    COUNT(timestamp) AS posts,
+                    COUNT(media_hash) AS images,
+                    COUNT(CASE email WHEN \'sage\' THEN 1 ELSE null END) AS sage,
+                    COUNT(CASE name WHEN \'Anonymous\' THEN 1 ELSE null END) AS anons,
+                    COUNT(CASE WHEN trip IS null THEN null ELSE 1 END) AS trips,
+                    COUNT(CASE name WHEN \'Anonymous\' THEN null ELSE 1 END) AS names
+                    ')
+                ->from($board->getTable(), 'b')
+                ->where('timestamp > ' . ($i * 86400 + $lastDay['day']))
+                ->andWhere('timestamp < ' . ($i * 86400 + $lastDay['day'] + 86400))
+                ->groupBy('time')
+                ->orderBy('time')
+                ->execute()
+                ->fetch();
+
+            if (isset($thisDay['time'])) {
+                $this->dc->getConnection()
+                    ->insert($board->getTable('_daily'), [
+                        'day' => $thisDay['time'],
+                        'posts' => $thisDay['posts'],
+                        'images' => $thisDay['images'],
+                        'sage' => $thisDay['sage'],
+                        'anons' => $thisDay['anons'],
+                        'trips' => $thisDay['trips'],
+                        'names' => $thisDay['names']
+                    ]);
+            }
+        }
+    }
+
+    public function updateUsers($board)
+    {
+        $datetime = new \DateTime('@' . time(), new \DateTimeZone('UTC'));
+        if ($board->archive) {
+            $datetime->setTimezone(new \DateTimeZone('America/New_York'));
+        }
+        $thisrun = strtotime($datetime->format('Y-m-d H:i:s'));
+        $lastrun = $this->preferences->get('foolfuuka.plugins.board_statistics.deferred.users.last.'.$board->shortname, $thisrun);
+        $res = $this->dc->qb()
+            ->select('name, trip, count(*) as postcount')
+            ->from($board->getTable(), 'b')
+            ->groupBy('name, trip')
+            ->orderBy('timestamp', 'desc')
+            ->where('timestamp > :lastrun')
+            ->andWhere('timestamp < :thisrun')
+            ->setParameter(':lastrun', $lastrun)
+            ->setParameter(':thisrun', $thisrun)
+            ->execute()
+            ->fetchAll();
+
+        foreach ($res as $r) {
+            if ($r['trip'] == null) {
+                $r['trip'] = '';
+            }
+
+            $rres = $this->dc->qb()
+                ->select('min(timestamp) as firstseen')
+                ->from($board->getTable())
+                ->where('name = :name')
+                ->setParameter(':name', $r['name'])
+                ->execute()
+                ->fetch();
+
+            $firstseen = $rres['firstseen'];
+
+            $ures = $this->dc->qb()
+                ->select('count(*) as nametrip')
+                ->from($board->getTable('_users'))
+                ->where('name = :name')
+                ->andWhere('trip = :trip')
+                ->setParameter(':name', $r['name'])
+                ->setParameter(':trip', $r['trip'])
+                ->execute()
+                ->fetch();
+
+            if ($ures['nametrip'] !== "0") {
+                $this->dc->qb()
+                    ->update($board->getTable('_users'))
+                    ->where('name = :name')
+                    ->andWhere('trip = :trip')
+                    ->set('firstseen', ':firstseen')
+                    ->set('postcount', 'postcount+:postcount')
+                    ->setParameter(':name', $r['name'])
+                    ->setParameter(':trip', $r['trip'])
+                    ->setParameter(':firstseen', $firstseen)
+                    ->setParameter(':postcount', $r['postcount'])
+                    ->execute();
+            } else {
+                $this->dc->getConnection()
+                    ->insert($board->getTable('_users'), [
+                        'name' => $r['name'],
+                        'trip' => $r['trip'],
+                        'firstseen' => $firstseen,
+                        'postcount' => $r['postcount']
+                    ]);
+            }
+        }
+
+        $this->preferences->set('foolfuuka.plugins.board_statistics.deferred.users.last.'.$board->shortname, $thisrun);
+    }
+
     public function processAvailability($board)
     {
         $datetime = new \DateTime('@'.time(), new \DateTimeZone('UTC'));
@@ -237,7 +382,7 @@ class BoardStatistics extends Model
 
     public function processActivity($board)
     {
-        $datetime = new \DateTime('@'.time(), new \DateTimeZone('UTC'));
+        $datetime = new \DateTime('@' . time(), new \DateTimeZone('UTC'));
 
         if ($board->archive) {
             $datetime->setTimezone(new \DateTimeZone('America/New_York'));
@@ -253,8 +398,8 @@ class BoardStatistics extends Model
                 COUNT(media_hash) AS images,
                 COUNT(CASE email WHEN \'sage\' THEN 1 ELSE null END) AS sage
             ')
-            ->from($board->getTable(), 'b') // TODO FORCE INDEX(timestamp_index)
-            ->where('timestamp > '.($timestamp - 86400))
+            ->from($board->getTable(), 'b')// TODO FORCE INDEX(timestamp_index)
+            ->where('timestamp > ' . ($timestamp - 86400))
             ->groupBy('time')
             ->orderBy('time')
             ->execute()
@@ -267,18 +412,22 @@ class BoardStatistics extends Model
                 0 AS images,
                 COUNT(CASE email WHEN \'sage\' THEN 1 ELSE null END) AS sage
             ')
-            ->from($board->getTable(), 'b') // TODO FORCE INDEX(timestamp_index)
-            ->where('timestamp > '.($timestamp - 86400))
+            ->from($board->getTable(), 'b')// TODO FORCE INDEX(timestamp_index)
+            ->where('timestamp > ' . ($timestamp - 86400))
             ->andWhere('subnum <> 0')
             ->groupBy('time')
             ->orderBy('time')
             ->execute()
             ->fetchAll();
 
+        if ($this->preferences->get('foolfuuka.plugins.board_statistics.deferred') && $this->isBoardDeferred($board)) {
+            $this->updateDaily($timestamp, $board);
+        }
+
         $result['karma'] = $this->dc->qb()
             ->select('day AS time, posts, images, sage')
             ->from($board->getTable('_daily'), 'bd')
-            ->where('day > '.floor(($timestamp - 31536000) / 86400) * 86400)
+            ->where('day > ' . floor(($timestamp - 31536000) / 86400) * 86400)
             ->groupBy('day')
             ->orderBy('day')
             ->execute()
@@ -310,6 +459,9 @@ class BoardStatistics extends Model
 
     public function processNewUsers($board)
     {
+        if ($this->preferences->get('foolfuuka.plugins.board_statistics.deferred') && $this->isBoardDeferred($board)) {
+             $this->updateUsers($board);
+        }
         return $this->dc->qb()
             ->select('name, trip, firstseen, postcount')
             ->from($board->getTable('_users'), 'bu')
@@ -321,7 +473,7 @@ class BoardStatistics extends Model
 
     public function processPopulation($board)
     {
-        $datetime = new \DateTime('@'.time(), new \DateTimeZone('UTC'));
+        $datetime = new \DateTime('@' . time(), new \DateTimeZone('UTC'));
 
         if ($board->archive) {
             $datetime->setTimezone(new \DateTimeZone('America/New_York'));
@@ -329,11 +481,15 @@ class BoardStatistics extends Model
 
         $timestamp = strtotime($datetime->format('Y-m-d H:i:s'));
 
+        if ($this->preferences->get('foolfuuka.plugins.board_statistics.deferred') && $this->isBoardDeferred($board)) {
+            $this->updateDaily($timestamp, $board);
+        }
+
         $res = [];
         $res['year'] = $this->dc->qb()
             ->select('day AS time, trips, names, anons')
             ->from($board->getTable('_daily'), 'bd')
-            ->where('day > '.floor(($timestamp - 31536000) / 86400) * 86400)
+            ->where('day > ' . floor(($timestamp - 31536000) / 86400) * 86400)
             ->groupBy('day')
             ->orderBy('day')
             ->execute()
@@ -352,6 +508,9 @@ class BoardStatistics extends Model
 
     public function processPostCount($board)
     {
+        if ($this->preferences->get('foolfuuka.plugins.board_statistics.deferred') && $this->isBoardDeferred($board)) {
+            $this->updateUsers($board);
+        }
         return $this->dc->qb()
             ->select('name, trip, postcount')
             ->from($board->getTable('_users'), 'bu')
