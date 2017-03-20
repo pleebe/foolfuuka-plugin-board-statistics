@@ -301,19 +301,22 @@ class BoardStatistics extends Model
             ->fetchAll();
 
         foreach ($res as $r) {
+            if ($r['name'] == null) {
+                $r['name'] = '';
+            }
             if ($r['trip'] == null) {
                 $r['trip'] = '';
             }
 
-            $rres = $this->dc->qb()
+            $firstseen = $this->dc->qb()
                 ->select('min(timestamp) as firstseen')
                 ->from($board->getTable())
-                ->where('name = :name')
+                ->where('trip = :trip')
+                ->orWhere('name = :name')
                 ->setParameter(':name', $r['name'])
+                ->setParameter(':trip', $r['trip'])
                 ->execute()
-                ->fetch();
-
-            $firstseen = $rres['firstseen'];
+                ->fetch()['firstseen'];
 
             $ures = $this->dc->qb()
                 ->select('count(*) as nametrip')
