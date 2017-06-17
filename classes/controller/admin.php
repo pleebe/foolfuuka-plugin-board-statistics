@@ -75,7 +75,7 @@ class BoardStatistics extends \Foolz\FoolFrame\Controller\Admin
             ];
         }
 
-        foreach ($this->radix_coll->getAll() as $key => $radix) {
+        foreach ($this->radix_coll->getArchives() as $key => $radix) {
             $arr['foolfuuka.plugins.board_statistics.deferred']['checkboxes'][] = [
                 'type' => 'checkbox',
                 'label' => $key,
