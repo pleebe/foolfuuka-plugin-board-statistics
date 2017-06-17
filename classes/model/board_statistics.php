@@ -243,6 +243,8 @@ class BoardStatistics extends Model
             $lastDay['day'] = 1167609600; // start from 2007 if nothing there
         }
 
+        $lastDay['day'] = $lastDay['day'] - 86400;
+
         $days = abs($lastDay['day'] - $endOfDay) / 60 / 60 / 24;
 
         for ($i = 1; $i < $days; $i++) {
@@ -266,6 +268,10 @@ class BoardStatistics extends Model
                 ->fetch();
 
             if (isset($thisDay['time'])) {
+                if ($i == 1) {
+                    $this->dc->getConnection()
+                        ->delete($board->getTable('_daily'), array('day' => $thisDay['time']));
+                }
                 $this->dc->getConnection()
                     ->insert($board->getTable('_daily'), [
                         'day' => $thisDay['time'],
